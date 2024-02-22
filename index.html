@@ -1,0 +1,254 @@
+<html>
+
+<head>
+    <title>Birthrateproblem</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <label for="birthRate">Birth rate</label>
+        <input type="text" id="birthRate" name="birthRate" value="1.2" />
+    </div>
+    <div>
+        <label for="minFertileAge">Min fertile age</label>
+        <input type="text" id="minFertileAge" name="minFertileAge" value="18" />
+    </div>
+    <div>
+        <label for="maxFertileAge">Max fertile age</label>
+        <input type="text" id="maxFertileAge" name="maxFertileAge" value="45" />
+    </div>
+    <div>
+        <label for="years">Years</label>
+        <input type="text" id="years" name="years" value="500" />
+    </div>
+    <div>
+        <label for="mu">Mu</label>
+        <input type="text" id="mu" name="mu" value="40" />
+    </div>
+    <div>
+        <label for="population">Population</label>
+        <input type="number" id="population" name="population" value="1400000000" />
+    </div>
+    <div>
+        <button id="simulate">simulate</button>
+    </div>
+    <canvas id="myChart" width="300" height="300"></canvas>
+    <canvas id="ageDistribution" width="300" height="300"></canvas>
+    <input type="range" id="yearSelect" name="yearSelect" min="0" max="100" value="0" style="width: 250px;" />
+    <label for="yearSelect">Year</label> <label id="yearLabel">0</label>
+</body>
+<script>
+    const uniform = (count, max) => {
+        const result = []
+        const oneAgeGroup = max / count
+        for (let i = 0; i < count; i++) {
+            result.push(oneAgeGroup)
+        }
+        return result
+    }
+
+    function normalDistribution(mu, sigma) {
+        let u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        return num * sigma + mu;
+    }
+
+    const normalAgeDistribution = (count, max, mu) => {
+        if (mu > max) throw new Error('mu should be less than max');
+        if (mu < 0) throw new Error('mu should be greater than 0');
+
+        let items = new Array(count).fill(0); // Initialize an array of 100 items with 0
+        const sigma = 15; // Standard deviation of the distribution
+
+        let div = 1
+
+        if (max > 100_000) {
+            div = 100
+        }
+
+        if (max > 900_000_000) {
+            div = 1_000
+        }
+
+        if (max > 9_000_000_000) {
+            div = 100_000
+        }
+
+        // Let's say we want to do this 1000 times to see the distribution effect
+        for (let i = 0; i < max / div; i++) {
+            let sample = normalDistribution(mu, sigma);
+            let index = Math.round(sample);
+            index = Math.max(0, Math.min(items.length - 1, index));
+            items[index] += div
+        }
+
+        return items
+    }
+
+    let populationChart
+    let ageDistributionChart
+
+    const minFertileAgeInput = document.getElementById('minFertileAge')
+    const maxFertileAgeInput = document.getElementById('maxFertileAge')
+    const birthRateInput = document.getElementById('birthRate')
+    const yearsInput = document.getElementById('years')
+    const muInput = document.getElementById('mu')
+    const populationInput = document.getElementById('population')
+    const simulateButton = document.getElementById('simulate')
+
+    const simulate = () => {
+        const minFertileAge = parseInt(minFertileAgeInput.value)
+        const maxFertileAge = parseInt(maxFertileAgeInput.value)
+        const fertilityYears = maxFertileAge - minFertileAge
+        const oneFertilityYearProb = 1 / fertilityYears
+        const startingPopulation = parseInt(populationInput.value)
+        const mu = parseInt(muInput.value)
+        const ageDistribution = normalAgeDistribution(130, startingPopulation, mu);
+        const birthRate = parseFloat(birthRateInput.value)
+        const years = parseInt(yearsInput.value)
+
+        const data = [ageDistribution.reduce((acc, cur) => acc + cur, 0)]
+        const ageDistributiongHistory = []
+
+        for (let i = 0; i < years; i++) {
+            ageDistributiongHistory.push(ageDistribution.slice())
+
+            let allDeaths = 0
+            for (let j = 0; j < ageDistribution.length; j++) {
+                if (j < 20) {
+                    const deaths = Math.round(ageDistribution[j] * 0.001)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                } else if (j < 40) {
+                    const deaths = Math.round(ageDistribution[j] * 0.0025)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                } else if (j < 60) {
+                    const deaths = Math.round(ageDistribution[j] * 0.01)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                } else if (j < 80) {
+                    const deaths = Math.round(ageDistribution[j] * 0.06)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                } else if (j < 90) {
+                    const deaths = Math.round(ageDistribution[j] * 0.15)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                } else if (j < 100) {
+                    const deaths = Math.round(ageDistribution[j] * 0.4)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                } else {
+                    const deaths = Math.round(ageDistribution[j] * 0.9)
+                    allDeaths += deaths
+                    ageDistribution[j] -= deaths
+                }
+            }
+
+            allDeaths = Math.round(allDeaths)
+
+            let births = 0
+            for (let j = ageDistribution.length - 1; j >= 0; j--) {
+                if (j === 0) {
+                    const fertileWomen = ageDistribution.slice(minFertileAge, maxFertileAge).reduce((acc, cur) => cur > 2 ? acc + cur : 0, 0) / 2;
+                    births = Math.round(fertileWomen * birthRate / 2 * oneFertilityYearProb); // Assuming half the population is female
+                    ageDistribution[0] = births;
+                } else {
+                    ageDistribution[j] = ageDistribution[j - 1];
+                }
+            }
+
+            const newpopu = Math.round(ageDistribution.reduce((acc, cur) => acc + cur, 0))
+            if (newpopu < 1) {
+                data.push(0)
+                break
+            }
+
+            data.push(newpopu)
+        }
+
+        {
+            const ctx = document.getElementById('ageDistribution').getContext('2d');
+            const yearSelect = document.getElementById('yearSelect')
+            yearSelect.max = data.length
+            const yearLabel = document.getElementById('yearLabel')
+
+            ageDistributionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ageDistributiongHistory[0].map((_, i) => i + 1),
+                    datasets: [{
+                        label: 'age distribution',
+                        data: ageDistributiongHistory[0],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            yearSelect.addEventListener('input', (e) => {
+                const year = e.target.value
+                let data = ageDistributiongHistory[year]
+
+                if (!data) {
+                    return
+                }
+
+                ageDistributionChart.data.datasets[0].data = data
+                ageDistributionChart.update()
+                yearLabel.innerText = year
+            })
+        }
+
+        var ctx = document.getElementById('myChart').getContext('2d');
+        populationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map((_, i) => i + 1),
+                datasets: [{
+                    label: 'population',
+                    data: data,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    simulateButton.onclick = () => {
+        if (populationChart) {
+            populationChart.destroy()
+        }
+
+        if (ageDistributionChart) {
+            ageDistributionChart.destroy()
+        }
+
+        simulate()
+    }
+
+    simulate()
+</script>
+</html>
